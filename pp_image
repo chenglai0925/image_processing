@@ -1,0 +1,98 @@
+from PIL import Image
+import numpy as np
+import os
+import matplotlib.pyplot as plt
+from matplotlib_scalebar.scalebar import ScaleBar
+
+# Path to the TIFF stack
+tiff_path = r"C:\Users\chw005\Desktop\test_andor-1.tif"
+
+# Open the TIFF file
+tiff_image = Image.open(tiff_path)
+
+# Initialize lists to store the pumpOFF (even) and pumpON (odd) frames
+pumpOFF_frames = []
+pumpON_frames = []
+
+# Directory to save the images
+output_dir = r"C:\Users\chw005\Desktop\TIFF_Output"
+os.makedirs(output_dir, exist_ok=True)
+
+# Loop through each frame in the TIFF stack and directly separate them
+for i in range(tiff_image.n_frames):
+    tiff_image.seek(i)  # Go to the i-th frame
+    frame = np.array(tiff_image)  # Convert the frame to a numpy array
+    
+    # Separate frames into pumpOFF (even) and pumpON (odd)
+    if i % 2 == 0:
+        pumpOFF_frames.append(frame)
+    else:
+        pumpON_frames.append(frame)
+
+# Convert lists of frames to numpy arrays for stacking and averaging
+pumpOFF_frames = np.array(pumpOFF_frames)
+pumpON_frames = np.array(pumpON_frames)
+
+# Save the stacked frames as TIFF
+def save_tiff_stack(frames, filename):
+    # Create a new TIFF file and save each frame
+    with Image.new("L", (frames.shape[2], frames.shape[1]), 0) as new_tiff:
+        new_tiff.save(filename, save_all=True, append_images=[Image.fromarray(frame) for frame in frames])
+
+# Save the stack of pumpOFF and pumpON frames
+save_tiff_stack(pumpOFF_frames, os.path.join(output_dir, "pumpOFF_stack.tif"))
+save_tiff_stack(pumpON_frames, os.path.join(output_dir, "pumpON_stack.tif"))
+
+# Average the frames along the first axis (the frame axis)
+pumpOFF_avg = np.mean(pumpOFF_frames, axis=0)
+pumpON_avg = np.mean(pumpON_frames, axis=0)
+
+# Subtract the pumpOFF average from the pumpON average
+difference_image = pumpON_avg - pumpOFF_avg
+
+# Save the average and subtracted images
+pumpOFF_avg_image = Image.fromarray(np.uint8(pumpOFF_avg))
+pumpON_avg_image = Image.fromarray(np.uint8(pumpON_avg))
+difference_image_pil = Image.fromarray(np.uint8(np.clip(difference_image, 0, 255)))
+
+pumpOFF_avg_image.save(os.path.join(output_dir, "pumpOFF_average.tif"))
+pumpON_avg_image.save(os.path.join(output_dir, "pumpON_average.tif"))
+difference_image_pil.save(os.path.join(output_dir, "pump_probe_image.tif"))
+
+# Plotting the average images and the subtracted image with colorbars and scale bars
+plt.figure(figsize=(18, 6))
+
+# Define the scale for the scale bar (e.g., 1 pixel = 1 micron)
+scale_bar_length = 1.0  # Length of the scale bar in microns or any other unit
+units = "um"  # Unit of the scale bar
+
+# Plot pumpOFF average image
+plt.subplot(1, 3, 1)
+plt.title('pumpOFF Average')
+img1 = plt.imshow(pumpOFF_avg, cmap='gray')
+plt.colorbar(img1, fraction=0.046, pad=0.04)
+scalebar = ScaleBar(scale_bar_length, units)  # Add scale bar
+plt.gca().add_artist(scalebar)
+plt.axis('off')
+
+# Plot pumpON average image
+plt.subplot(1, 3, 2)
+plt.title('pumpON Average')
+img2 = plt.imshow(pumpON_avg, cmap='gray')
+plt.colorbar(img2, fraction=0.046, pad=0.04)
+scalebar = ScaleBar(scale_bar_length, units)  # Add scale bar
+plt.gca().add_artist(scalebar)
+plt.axis('off')
+
+# Plot the subtracted image
+plt.subplot(1, 3, 3)
+plt.title('pump_probe Image')
+img3 = plt.imshow(difference_image, cmap='gray')
+plt.colorbar(img3, fraction=0.046, pad=0.04)
+scalebar = ScaleBar(scale_bar_length, units)  # Add scale bar
+plt.gca().add_artist(scalebar)
+plt.axis('off')
+
+plt.show()
+
+print("Stacked images, average images, and the subtracted image have been saved and plotted with colorbars and scale bars.")
